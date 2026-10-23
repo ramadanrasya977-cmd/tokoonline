@@ -1,4 +1,6 @@
 
+package com.example.mobileprograming
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -9,6 +11,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
@@ -21,10 +24,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.mobileprograming.ui.theme.MobileProgramingTheme
+import java.text.NumberFormat
+import java.util.Locale
 
 private val Green = Color(0xFF176B52)
 private val Background = Color(0xFFF5F7F5)
@@ -37,7 +44,7 @@ data class Product(
     val emoji: String
 )
 
-private val products = listOf(
+private val productList = listOf(
     Product(1, "Sneakers Casual", "Fashion", 249000, "👟"),
     Product(2, "Kaos Basic", "Fashion", 89000, "👕"),
     Product(3, "Jam Tangan", "Aksesoris", 175000, "⌚"),
@@ -49,7 +56,8 @@ private val products = listOf(
 )
 
 private fun rupiah(value: Int): String {
-    return "Rp " + "%,d".format(value).replace(',', '.')
+    val formatter = NumberFormat.getNumberInstance(Locale("id", "ID"))
+    return "Rp " + formatter.format(value)
 }
 
 class MainActivity : ComponentActivity() {
@@ -66,98 +74,246 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun TokoOnlineApp() {
-    var selectedTab by remember { mutableStateOf(0) }
+    var isLoggedIn by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableIntStateOf(0) }
     var search by remember { mutableStateOf("") }
     var category by remember { mutableStateOf("Semua") }
     var selectedProduct by remember { mutableStateOf<Product?>(null) }
-    val cart = remember { mutableStateMapOf<Int, Int>() }
 
-    val filteredProducts = products.filter { product ->
+    val cart = remember { mutableStateMapOf<Int, Int>() }
+    val cartCount = cart.values.sum()
+
+    val filteredProducts = productList.filter { product ->
         (category == "Semua" || product.category == category) &&
                 product.name.contains(search, ignoreCase = true)
     }
 
-    Scaffold(
-        containerColor = Background,
-        bottomBar = {
-            NavigationBar(containerColor = Color.White) {
-                NavigationBarItem(
-                    selected = selectedTab == 0 && selectedProduct == null,
-                    onClick = {
-                        selectedTab = 0
-                        selectedProduct = null
-                    },
-                    icon = { Icon(Icons.Default.Home, contentDescription = "Beranda") },
-                    label = { Text("Beranda") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = {
-                        selectedTab = 1
-                        selectedProduct = null
-                    },
-                    icon = {
-                        BadgedBox(
-                            badge = {
-                                val count = cart.values.sum()
-                                if (count > 0) {
-                                    Badge { Text(count.toString()) }
-                                }
-                            }
-                        ) {
+    if (!isLoggedIn) {
+        LoginScreen(
+            onLogin = { isLoggedIn = true }
+        )
+    } else {
+        Scaffold(
+            containerColor = Background,
+            bottomBar = {
+                NavigationBar(containerColor = Color.White) {
+                    NavigationBarItem(
+                        selected = selectedTab == 0 && selectedProduct == null,
+                        onClick = {
+                            selectedTab = 0
+                            selectedProduct = null
+                        },
+                        icon = {
                             Icon(
-                                Icons.Default.ShoppingCart,
-                                contentDescription = "Keranjang"
+                                Icons.Default.Home,
+                                contentDescription = "Beranda"
                             )
-                        }
-                    },
-                    label = { Text("Keranjang") }
-                )
+                        },
+                        label = { Text("Beranda") }
+                    )
+
+                    NavigationBarItem(
+                        selected = selectedTab == 1 && selectedProduct == null,
+                        onClick = {
+                            selectedTab = 1
+                            selectedProduct = null
+                        },
+                        icon = {
+                            BadgedBox(
+                                badge = {
+                                    if (cartCount > 0) {
+                                        Badge { Text(cartCount.toString()) }
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.ShoppingCart,
+                                    contentDescription = "Keranjang"
+                                )
+                            }
+                        },
+                        label = { Text("Keranjang") }
+                    )
+                }
+            }
+        ) { padding ->
+            when {
+                selectedProduct != null -> {
+                    ProductDetail(
+                        product = selectedProduct!!,
+                        onBack = { selectedProduct = null },
+                        onAdd = {
+                            val id = selectedProduct!!.id
+                            cart[id] = (cart[id] ?: 0) + 1
+                        },
+                        modifier = Modifier.padding(padding)
+                    )
+                }
+
+                selectedTab == 0 -> {
+                    HomeScreen(
+                        search = search,
+                        onSearchChange = { search = it },
+                        category = category,
+                        onCategoryChange = { category = it },
+                        products = filteredProducts,
+                        onProductClick = { selectedProduct = it },
+                        onAdd = { product ->
+                            cart[product.id] = (cart[product.id] ?: 0) + 1
+                        },
+                        modifier = Modifier.padding(padding)
+                    )
+                }
+
+                else -> {
+                    CartScreen(
+                        cart = cart,
+                        onIncrease = { id ->
+                            cart[id] = (cart[id] ?: 0) + 1
+                        },
+                        onDecrease = { id ->
+                            val quantity = cart[id] ?: 0
+                            if (quantity <= 1) {
+                                cart.remove(id)
+                            } else {
+                                cart[id] = quantity - 1
+                            }
+                        },
+                        modifier = Modifier.padding(padding)
+                    )
+                }
             }
         }
-    ) { padding ->
-        when {
-            selectedProduct != null -> {
-                ProductDetail(
-                    product = selectedProduct!!,
-                    onBack = { selectedProduct = null },
-                    onAdd = {
-                        val id = selectedProduct!!.id
-                        cart[id] = (cart[id] ?: 0) + 1
-                    },
-                    modifier = Modifier.padding(padding)
-                )
+    }
+}
+
+@Composable
+fun LoginScreen(onLogin: () -> Unit) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+    var message by remember { mutableStateOf("") }
+
+    Surface(
+        modifier = Modifier.fillMaxSize(),
+        color = Background
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text("🛍️", fontSize = 56.sp)
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "TOKO ONLINE",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                color = Green
+            )
+
+            Spacer(Modifier.height(8.dp))
+
+            Text(
+                "Selamat datang! Silakan login.",
+                color = Color.Gray
+            )
+
+            Spacer(Modifier.height(28.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Color.White
+                ),
+                elevation = CardDefaults.cardElevation(4.dp)
+            ) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        "Login Akun",
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    Spacer(Modifier.height(20.dp))
+
+                    OutlinedTextField(
+                        value = email,
+                        onValueChange = { email = it },
+                        label = { Text("Email atau Username") },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Email
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = { Text("Password") },
+                        singleLine = true,
+                        visualTransformation =
+                            PasswordVisualTransformation(),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(Modifier.height(22.dp))
+
+                    Button(
+                        onClick = {
+                            if (
+                                email.isNotBlank() &&
+                                password.isNotBlank()
+                            ) {
+                                message = ""
+                                onLogin()
+                            } else {
+                                message = "Email dan password wajib diisi."
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Green
+                        )
+                    ) {
+                        Text("Login", fontSize = 16.sp)
+                    }
+
+                    if (message.isNotEmpty()) {
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            message,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        "Belanja mudah, nyaman, dan praktis.",
+                        color = Color.Gray,
+                        fontSize = 12.sp
+                    )
+                }
             }
 
-            selectedTab == 0 -> {
-                HomeScreen(
-                    search = search,
-                    onSearchChange = { search = it },
-                    category = category,
-                    onCategoryChange = { category = it },
-                    products = filteredProducts,
-                    onProductClick = { selectedProduct = it },
-                    onAdd = { product ->
-                        cart[product.id] = (cart[product.id] ?: 0) + 1
-                    },
-                    modifier = Modifier.padding(padding)
-                )
-            }
+            Spacer(Modifier.height(20.dp))
 
-            else -> {
-                CartScreen(
-                    cart = cart,
-                    onIncrease = { id ->
-                        cart[id] = (cart[id] ?: 0) + 1
-                    },
-                    onDecrease = { id ->
-                        val qty = cart[id] ?: 0
-                        if (qty <= 1) cart.remove(id)
-                        else cart[id] = qty - 1
-                    },
-                    modifier = Modifier.padding(padding)
-                )
-            }
+            Text(
+                "Praktik Android Studio • Kotlin",
+                fontSize = 12.sp,
+                color = Color.Gray
+            )
         }
     }
 }
@@ -217,9 +373,9 @@ fun HomeScreen(
 
         item {
             Card(
-                colors = CardDefaults.cardColors(containerColor = Green),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(22.dp),
-                modifier = Modifier.fillMaxWidth()
+                colors = CardDefaults.cardColors(containerColor = Green)
             ) {
                 Column(
                     modifier = Modifier.padding(22.dp),
@@ -247,19 +403,18 @@ fun HomeScreen(
         }
 
         item {
-            Text(
-                "Kategori",
-                fontSize = 19.sp,
-                fontWeight = FontWeight.Bold
-            )
+            Text("Kategori", fontSize = 19.sp, fontWeight = FontWeight.Bold)
             Spacer(Modifier.height(10.dp))
 
-            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 items(listOf("Semua", "Fashion", "Elektronik", "Aksesoris")) {
+                        itemCategory ->
                     FilterChip(
-                        selected = category == it,
-                        onClick = { onCategoryChange(it) },
-                        label = { Text(it) },
+                        selected = category == itemCategory,
+                        onClick = { onCategoryChange(itemCategory) },
+                        label = { Text(itemCategory) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = Green,
                             selectedLabelColor = Color.White
@@ -300,6 +455,7 @@ fun HomeScreen(
                         modifier = Modifier.weight(1f)
                     )
                 }
+
                 if (rowProducts.size == 1) {
                     Spacer(Modifier.weight(1f))
                 }
@@ -410,10 +566,7 @@ fun ProductDetail(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(240.dp)
-                .background(
-                    Color(0xFFE8F1EB),
-                    RoundedCornerShape(24.dp)
-                ),
+                .background(Color(0xFFE8F1EB), RoundedCornerShape(24.dp)),
             contentAlignment = Alignment.Center
         ) {
             Text(product.emoji, fontSize = 100.sp)
@@ -457,9 +610,9 @@ fun CartScreen(
     onDecrease: (Int) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cartProducts = products.filter { (cart[it.id] ?: 0) > 0 }
-    val total = cartProducts.sumOf {
-        it.price * (cart[it.id] ?: 0)
+    val cartProducts = productList.filter { (cart[it.id] ?: 0) > 0 }
+    val total = cartProducts.sumOf { product ->
+        product.price * (cart[product.id] ?: 0)
     }
 
     Column(
@@ -467,11 +620,7 @@ fun CartScreen(
             .fillMaxSize()
             .padding(18.dp)
     ) {
-        Text(
-            "Keranjang Saya",
-            fontSize = 25.sp,
-            fontWeight = FontWeight.Bold
-        )
+        Text("Keranjang Saya", fontSize = 25.sp, fontWeight = FontWeight.Bold)
         Spacer(Modifier.height(18.dp))
 
         if (cartProducts.isEmpty()) {
@@ -507,14 +656,8 @@ fun CartScreen(
                             Spacer(Modifier.width(12.dp))
 
                             Column(Modifier.weight(1f)) {
-                                Text(
-                                    product.name,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(
-                                    rupiah(product.price),
-                                    color = Green
-                                )
+                                Text(product.name, fontWeight = FontWeight.Bold)
+                                Text(rupiah(product.price), color = Green)
                             }
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -523,10 +666,12 @@ fun CartScreen(
                                 ) {
                                     Text("−", fontSize = 22.sp)
                                 }
+
                                 Text(
                                     (cart[product.id] ?: 0).toString(),
                                     fontWeight = FontWeight.Bold
                                 )
+
                                 IconButton(
                                     onClick = { onIncrease(product.id) }
                                 ) {
